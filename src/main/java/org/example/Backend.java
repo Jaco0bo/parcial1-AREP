@@ -58,12 +58,7 @@ public class Backend {
 
         System.out.println("KEY " + keyValue + " WITH VALUE " + Value);
         String result = "";
-        if(function.equals("class")){
-            result = classFunction(values);
-        }
-        else {
-
-        }
+        // gg
         StringBuilder response = new StringBuilder();
         response.append("HTTP/1.1 200 OK\r\n");
         response.append("Content-Type: application/json\r\n");
@@ -74,14 +69,11 @@ public class Backend {
     }
 
     public static String invoke(String[] parameters) throws Exception{
-        String className = parameters[0];
-        String methodName = parameters[1];
-        Class<?> c = Class.forName(className);
-        StringBuilder response = new StringBuilder();
+        String key = parameters[0];
+        String value = parameters[1];
 
-        Method m = c.getDeclaredMethod(methodName);
-        Object result = m.invoke(null);
-        response.append("{\"result\":"+ "\"" + result.toString() + "\"" + "}");
+        StringBuilder response = new StringBuilder();
+        // response.append("{\"result\":"+ "\"" + result.toString() + "\"" + "}");
         System.out.println(response.toString());
         return response.toString();
     }
