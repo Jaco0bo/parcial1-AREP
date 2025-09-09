@@ -9,6 +9,7 @@ import java.net.URL;
 public class HttpConection {
     private static final String USER_AGENT = "Mozilla/5.0";
     private static final String GET_URL = "http://localhost:35000/";
+    public static int lastResponseCode = 0;
 
     public static String getResponse(String request) throws Exception {
 
@@ -19,11 +20,13 @@ public class HttpConection {
 
         //The following invocation perform the connection implicitly before getting the code
         int responseCode = con.getResponseCode();
+        lastResponseCode = responseCode;
         System.out.println("GET Response Code :: " + responseCode);
         String result = "";
+        BufferedReader in = null;
         if (responseCode == HttpURLConnection.HTTP_OK) { // success
-            BufferedReader in = new BufferedReader(new InputStreamReader(
-                    con.getInputStream()));
+             in = new BufferedReader(new InputStreamReader(
+                    con.getInputStream(), "UTF-8"));
             String inputLine;
             StringBuffer response = new StringBuffer();
 
@@ -37,5 +40,9 @@ public class HttpConection {
             System.out.println();
         }
         return result;
+    }
+
+    public static int getLastResponseCode(){
+        return lastResponseCode;
     }
 }

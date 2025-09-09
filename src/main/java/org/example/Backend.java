@@ -3,9 +3,14 @@ package org.example;
 import java.lang.reflect.Method;
 import java.net.*;
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class Backend {
+    private static final Map<String, String> store = new ConcurrentHashMap<>();
     public static void main(String[] args) throws Exception {
         ServerSocket serverSocket = null;
         try {
@@ -15,16 +20,11 @@ public class Backend {
             System.exit(1);
         }
 
-        Socket clientSocket = null;
-        try {
-            System.out.println("Listo para recibir ...");
-            clientSocket = serverSocket.accept();
-        } catch (IOException e) {
-            System.err.println("Accept failed.");
-            System.exit(1);
-        }
-        if (clientSocket != null){
-            handle(clientSocket);
+        while (true) {
+            Socket clientSocket = serverSocket.accept();
+            if (clientSocket != null) {
+                handle(clientSocket);
+            }
         }
     }
 
@@ -38,7 +38,7 @@ public class Backend {
         URI uri = new URI(request);
         System.out.println("REQUEST " + request);
 
-        if(uri.getPath().startsWith("/compreflex")){
+        if(uri.getPath().startsWith("/getrespmsg")){
             handleRequest(out, uri);
         }
         in.close();
@@ -47,21 +47,50 @@ public class Backend {
     }
 
     private static void handleRequest(PrintWriter out, URI resource)throws Exception{
-        String key = resource.getQuery().split("=")[1];
-        System.out.println("KEY " + key);
-        int index = key.indexOf("}");
-        String keyValue = key.substring(1, index).toLowerCase();
-        String value = resource.getQuery().split("=")[2];
-        System.out.println("VALUE " + key);
-        int valueIndex = value.indexOf("}");
-        String Value = key.substring(1, index).toLowerCase();
+        String query = resource.getQuery();
+        Map<String, String> params = new HashMap<>();
+        if (query != null && !query.isEmpty()) {
+            String [] pairs = query.split("&");
+            for (String pair : pairs) {
+                String [] kv = pair.split("=", 2);
+                String name = URLDecoder.decode(kv[0], StandardCharsets.UTF_8.name());
+                String val = kv.length > 1 ? URLDecoder.decode(kv[1], StandardCharsets.UTF_8.name()) : "";
+                params.put(name, val);
+            }
+        }
 
-        System.out.println("KEY " + keyValue + " WITH VALUE " + Value);
-        String result = "";
-        // gg
+        String keyValue = params.getOrDefault("key", "");
+        String value = params.getOrDefault("value", "");
+        System.out.println("KEY  = " + keyValue);
+        System.out.println("VALUE " + value);
+
+        int statusCode = 200;
+        String result;
+
+        if (keyValue == null || keyValue.isEmpty()) {
+            statusCode = 400;
+            result = "{\"error\":\"bad_request\",\"message\":\"missing key\"}";
+        } else {
+            if (value != null && !value.isEmpty()) {
+                result = invoke(new String[]{keyValue, value});
+                statusCode = 200;
+            } else {
+                if (store.containsKey(keyValue)) {
+                    String val = store.get(keyValue);
+                    result = "{\"key\":\"" + escapeJson(keyValue) + "\",\"value\":\"" + escapeJson(val) + "\"}";
+                    statusCode = 200;
+                } else {
+                    result = "{\"error\":\"key_not_found\",\"key\":\"" + escapeJson(keyValue) + "\"}";
+                    statusCode = 404;
+                }
+            }
+        }
+
+        byte[] bodyBytes = result.getBytes(StandardCharsets.UTF_8);
+        String reason = (statusCode == 200) ? "OK" : (statusCode == 400) ? "Bad Request" : (statusCode == 404) ? "Not Found" : "";
         StringBuilder response = new StringBuilder();
-        response.append("HTTP/1.1 200 OK\r\n");
-        response.append("Content-Type: application/json\r\n");
+        response.append("HTTP/1.1 " + statusCode + " " + reason + "\r\n");
+        response.append("Content-Type: application/json; charset=UTF-8\r\n");
         response.append("\r\n");
         response.append(result);
         out.println(response.toString());
@@ -72,9 +101,21 @@ public class Backend {
         String key = parameters[0];
         String value = parameters[1];
 
-        StringBuilder response = new StringBuilder();
-        // response.append("{\"result\":"+ "\"" + result.toString() + "\"" + "}");
-        System.out.println(response.toString());
-        return response.toString();
+        boolean existed = store.containsKey(key);
+        store.put(key, value);
+        String status = existed ? "replaced" : "created";
+
+        String result = "{\"key\":\"" + escapeJson(key) + "\",\"value\":\"" + escapeJson(value) + "\",\"status\":\"" + status + "\"}";
+        System.out.println("INVOKE -> " + result);
+        return result;
+    }
+
+    public static String escapeJson(String s) {
+        if (s == null) return "";
+        return s
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r");
     }
 }
